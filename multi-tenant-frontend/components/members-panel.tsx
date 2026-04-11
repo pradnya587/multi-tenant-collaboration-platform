@@ -12,40 +12,40 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
-import { MoreHorizontal, Shield, User, UserMinus, Copy, Check } from "lucide-react"
+import { MoreHorizontal, Shield, User, UserMinus, Copy, Check, MessageCircle } from "lucide-react"
 import { toast } from "sonner"
 import { useState } from "react"
 import { TeamMember } from "@/lib/types"
 
 interface MembersPanelProps {
   teamId: string
+  onStartPrivateChat?: (memberId: string) => void
 }
 
-export function MembersPanel({ teamId }: MembersPanelProps) {
-  const { teams, getUserById, currentUser, removeMember, updateMemberRole, getUserRole } = useApp()
+export function MembersPanel({ teamId, onStartPrivateChat }: MembersPanelProps) {
+  const { teams, currentUser, removeMember, updateMemberRole, getUserRole } = useApp()
   const team = teams.find((t) => t.id === teamId)
   const isAdmin = getUserRole(teamId, currentUser?.id ?? "") === "admin"
   const [copied, setCopied] = useState(false)
   const [members, setMembers] = useState<TeamMember[]>([])
 
   useEffect(() => {
-  const fetchMembers = async () => {
-    if (!teamId) return
-
-    try {
-      const res = await fetch(
-        `http://localhost:5000/api/teams/${teamId}/members`
-      )
-      const data = await res.json()
-      setMembers(data)
-    } catch (err) {
-      console.error("Failed to fetch members:", err)
+    const fetchMembers = async () => {
+      if (!teamId) return
+      try {
+        const token = localStorage.getItem("token") || ""
+        const res = await fetch(
+          `http://localhost:5000/api/teams/${teamId}/members`,
+          { headers: { Authorization: `Bearer ${token}` } }
+        )
+        const data = await res.json()
+        if (Array.isArray(data)) setMembers(data)
+      } catch (err) {
+        console.error("Failed to fetch members:", err)
+      }
     }
-  }
-
-  fetchMembers()
-}, [teamId])
-  
+    fetchMembers()
+  }, [teamId])
 
   if (!team) return null
 
@@ -54,6 +54,14 @@ export function MembersPanel({ teamId }: MembersPanelProps) {
     setCopied(true)
     toast.success("Invite code copied!")
     setTimeout(() => setCopied(false), 2000)
+  }
+
+  // Determine if the current user can message a specific member
+  const canMessage = (memberId: string, memberRole: string) => {
+    if (memberId === currentUser?.id) return false // can't message self
+    if (isAdmin) return true // admin can message anyone
+    if (memberRole === "admin") return true // member can message admin
+    return false
   }
 
   return (
@@ -93,102 +101,118 @@ export function MembersPanel({ teamId }: MembersPanelProps) {
           <div className="flex items-center justify-between">
             <div>
               <p className="text-sm font-semibold text-foreground">Members</p>
-              <p className="text-xs text-muted-foreground">{team.members.length} people in this team</p>
+              <p className="text-xs text-muted-foreground">
+                {members.length > 0 ? members.length : team.members.length} people in this team
+              </p>
             </div>
           </div>
         </div>
         <div className="divide-y divide-border/20">
-          {team.members.map((member) => {
-            const user = getUserById(member.userId)
-            if (!user) return null
-            const isSelf = user.id === currentUser?.id
-            return (
-              <div key={member.userId} className="flex items-center justify-between px-6 py-4 transition-colors hover:bg-accent/20">
-                <div className="flex items-center gap-3.5">
-                  <div className="relative">
-                    <Avatar className="h-10 w-10 ring-2 ring-border/30 ring-offset-2 ring-offset-card">
-                      <AvatarFallback className="bg-primary/10 font-bold text-primary">
-                        {user.avatar}
-                      </AvatarFallback>
-                    </Avatar>
-                    <div
-                      className={cn(
-                        "absolute -bottom-0.5 -right-0.5 h-3 w-3 rounded-full border-2 border-card",
-                        user.status === "online"
-                          ? "bg-success"
-                          : user.status === "away"
-                            ? "bg-warning"
-                            : "bg-muted-foreground/40",
-                      )}
+          {members.length === 0 ? (
+            /* Loading state while members are being fetched */
+            <div className="flex items-center justify-center py-12">
+              <p className="text-sm text-muted-foreground animate-pulse">Loading members...</p>
+            </div>
+          ) : (
+            /* Render using fetched (populated) member data */
+            members.map((member) => {
+              const memberId = member.userId?._id || (member.userId as any)
+              const memberName = member.userId?.name ?? "Unknown"
+              const memberEmail = member.userId?.email ?? ""
+              const isSelf = memberId === currentUser?.id
+              const memberRole = member.role
 
-                      
-                    />
-                  </div>
-                  <div>
-                    <div className="flex items-center gap-2">
-                      <span className="text-sm font-semibold text-foreground">
-                        {user.name}
-                      </span>
-                      {isSelf && (
-                        <Badge variant="outline" className="h-5 border-primary/20 px-1.5 text-[10px] font-medium text-primary">
-                          You
-                        </Badge>
-                      )}
+              return (
+                <div key={memberId} className="flex items-center justify-between px-6 py-4 transition-colors hover:bg-accent/20">
+                  <div className="flex items-center gap-3.5">
+                    <div className="relative">
+                      <Avatar className="h-10 w-10 ring-2 ring-border/30 ring-offset-2 ring-offset-card">
+                        <AvatarFallback className="bg-primary/10 font-bold text-primary">
+                          {memberName.charAt(0).toUpperCase()}
+                        </AvatarFallback>
+                      </Avatar>
+                      <div className="absolute -bottom-0.5 -right-0.5 h-3 w-3 rounded-full border-2 border-card bg-success" />
                     </div>
-                    <p className="text-xs text-muted-foreground">{user.email}</p>
+                    <div>
+                      <div className="flex items-center gap-2">
+                        <span className="text-sm font-semibold text-foreground">
+                          {memberName}
+                        </span>
+                        {isSelf && (
+                          <Badge variant="outline" className="h-5 border-primary/20 px-1.5 text-[10px] font-medium text-primary">
+                            You
+                          </Badge>
+                        )}
+                      </div>
+                      <p className="text-xs text-muted-foreground">{memberEmail}</p>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <Badge
+                      variant="outline"
+                      className={cn(
+                        "gap-1 text-[10px] font-semibold uppercase tracking-wider",
+                        memberRole === "admin"
+                          ? "border-primary/30 text-primary"
+                          : "border-border/50 text-muted-foreground",
+                      )}
+                    >
+                      {memberRole === "admin" ? (
+                        <><Shield className="h-3 w-3" /> Admin</>
+                      ) : (
+                        <><User className="h-3 w-3" /> Member</>
+                      )}
+                    </Badge>
+
+                    {/* Message button — opens private chat with this member */}
+                    {canMessage(memberId, memberRole) && onStartPrivateChat && (
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => onStartPrivateChat(memberId)}
+                        className="h-8 gap-1.5 rounded-lg border-border/50 text-xs text-muted-foreground hover:border-primary/30 hover:text-primary"
+                      >
+                        <MessageCircle className="h-3.5 w-3.5" />
+                        Message
+                      </Button>
+                    )}
+
+                    {isAdmin && !isSelf && (
+                      <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                          <Button variant="ghost" size="icon" className="h-8 w-8 rounded-lg text-muted-foreground hover:text-foreground">
+                            <MoreHorizontal className="h-4 w-4" />
+                          </Button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end" className="rounded-xl border-border/50">
+                          <DropdownMenuItem
+                            onClick={() => {
+                              updateMemberRole(teamId, memberId, memberRole === "admin" ? "member" : "admin")
+                              toast.success(`${memberName} is now ${memberRole === "admin" ? "a member" : "an admin"}`)
+                            }}
+                            className="rounded-lg"
+                          >
+                            <Shield className="mr-2 h-4 w-4" />
+                            {memberRole === "admin" ? "Demote to Member" : "Promote to Admin"}
+                          </DropdownMenuItem>
+                          <DropdownMenuItem
+                            className="rounded-lg text-destructive focus:text-destructive"
+                            onClick={() => {
+                              removeMember(teamId, memberId)
+                              toast.success(`${memberName} removed from team`)
+                            }}
+                          >
+                            <UserMinus className="mr-2 h-4 w-4" />
+                            Remove from Team
+                          </DropdownMenuItem>
+                        </DropdownMenuContent>
+                      </DropdownMenu>
+                    )}
                   </div>
                 </div>
-                <div className="flex items-center gap-2">
-                  <Badge
-                    variant="outline"
-                    className={cn(
-                      "gap-1 text-[10px] font-semibold uppercase tracking-wider",
-                      member.role === "admin"
-                        ? "border-primary/30 text-primary"
-                        : "border-border/50 text-muted-foreground",
-                    )}
-                  >
-                    {member.role === "admin" ? (
-                      <><Shield className="h-3 w-3" /> Admin</>
-                    ) : (
-                      <><User className="h-3 w-3" /> Member</>
-                    )}
-                  </Badge>
-                  {isAdmin && !isSelf && (
-                    <DropdownMenu>
-                      <DropdownMenuTrigger asChild>
-                        <Button variant="ghost" size="icon" className="h-8 w-8 rounded-lg text-muted-foreground hover:text-foreground">
-                          <MoreHorizontal className="h-4 w-4" />
-                        </Button>
-                      </DropdownMenuTrigger>
-                      <DropdownMenuContent align="end" className="rounded-xl border-border/50">
-                        <DropdownMenuItem
-                          onClick={() => {
-                            updateMemberRole(teamId, user.id, member.role === "admin" ? "member" : "admin")
-                            toast.success(`${user.name} is now ${member.role === "admin" ? "a member" : "an admin"}`)
-                          }}
-                          className="rounded-lg"
-                        >
-                          <Shield className="mr-2 h-4 w-4" />
-                          {member.role === "admin" ? "Demote to Member" : "Promote to Admin"}
-                        </DropdownMenuItem>
-                        <DropdownMenuItem
-                          className="rounded-lg text-destructive focus:text-destructive"
-                          onClick={() => {
-                            removeMember(teamId, user.id)
-                            toast.success(`${user.name} removed from team`)
-                          }}
-                        >
-                          <UserMinus className="mr-2 h-4 w-4" />
-                          Remove from Team
-                        </DropdownMenuItem>
-                      </DropdownMenuContent>
-                    </DropdownMenu>
-                  )}
-                </div>
-              </div>
-            )
-          })}
+              )
+            })
+          )}
         </div>
       </div>
     </div>

@@ -17,7 +17,7 @@ export type Team = {
   createdBy: string
   members: {
     userId: string
-    role: string
+    role: Role
     joinedAt: string
   }[]
 }

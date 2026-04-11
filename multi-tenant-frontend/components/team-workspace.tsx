@@ -1,5 +1,6 @@
 "use client"
 
+import { useState } from "react"
 import { useApp } from "@/context/app-context"
 import { cn } from "@/lib/utils"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
@@ -16,9 +17,21 @@ interface TeamWorkspaceProps {
 }
 
 export function TeamWorkspace({ teamId, onBack }: TeamWorkspaceProps) {
-  const { teams, currentUser, getUserRole } = useApp()
+  const { teams, currentUser, getUserRole, startPrivateChat } = useApp()
   const team = teams.find((t) => t.id === teamId)
   const role = getUserRole(teamId, currentUser?.id ?? "")
+  const showPrivateTab = (team?.members?.length ?? 0) > 1
+
+  // Controlled tab state — allows Members panel "Message" button to switch to Private Chat
+  const [activeTab, setActiveTab] = useState("group-chat")
+  const [privateChatTarget, setPrivateChatTarget] = useState<string | null>(null)
+
+  // Called when user clicks "Message" on a member in the Members panel
+  const handleMessageMember = (memberId: string) => {
+    const chatId = startPrivateChat(teamId, memberId)
+    setPrivateChatTarget(chatId)
+    setActiveTab("private-chat")
+  }
 
   if (!team) return null
 
@@ -58,14 +71,19 @@ export function TeamWorkspace({ teamId, onBack }: TeamWorkspaceProps) {
 
       {/* Tabs */}
       <div className="flex-1 overflow-auto p-6">
-        <Tabs defaultValue="group-chat" className="flex flex-col gap-5">
+        <Tabs value={activeTab} onValueChange={setActiveTab} className="flex flex-col gap-5">
           <TabsList className="w-fit rounded-xl bg-muted/50 p-1">
             <TabsTrigger value="group-chat" className="gap-1.5 rounded-lg data-[state=active]:bg-card data-[state=active]:shadow-sm">
               <Hash className="h-3.5 w-3.5" /> Group Chat
             </TabsTrigger>
-            <TabsTrigger value="private-chat" className="gap-1.5 rounded-lg data-[state=active]:bg-card data-[state=active]:shadow-sm">
-              <Lock className="h-3.5 w-3.5" /> Private Chat
-            </TabsTrigger>
+            
+            {/* Private Chat: show when team has other members */}
+            {showPrivateTab && (
+              <TabsTrigger value="private-chat" className="gap-1.5 rounded-lg data-[state=active]:bg-card data-[state=active]:shadow-sm">
+                <Lock className="h-3.5 w-3.5" /> Private Chat
+              </TabsTrigger>
+            )}
+
             <TabsTrigger value="tasks" className="gap-1.5 rounded-lg data-[state=active]:bg-card data-[state=active]:shadow-sm">
               <CheckSquare className="h-3.5 w-3.5" /> Task Board
             </TabsTrigger>
@@ -78,16 +96,18 @@ export function TeamWorkspace({ teamId, onBack }: TeamWorkspaceProps) {
             <ChatPanel teamId={teamId} type="group" />
           </TabsContent>
 
-          <TabsContent value="private-chat">
-            <ChatPanel teamId={teamId} type="private" />
-          </TabsContent>
+          {showPrivateTab && (
+            <TabsContent value="private-chat">
+              <ChatPanel teamId={teamId} type="private" initialActiveChatId={privateChatTarget} />
+            </TabsContent>
+          )}
 
           <TabsContent value="tasks">
             <TaskBoard teamId={teamId} />
           </TabsContent>
 
           <TabsContent value="members">
-            <MembersPanel teamId={teamId} />
+            <MembersPanel teamId={teamId} onStartPrivateChat={handleMessageMember} />
           </TabsContent>
         </Tabs>
       </div>

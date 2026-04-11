@@ -3,31 +3,82 @@
 import { useState, useRef, useEffect } from "react"
 import { useApp } from "@/context/app-context"
 import { cn } from "@/lib/utils"
-import type { ChatRoom } from "@/lib/types"
+import type { ChatRoom, TeamMember } from "@/lib/types"
 import { Avatar, AvatarFallback } from "@/components/ui/avatar"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { ScrollArea } from "@/components/ui/scroll-area"
-import { Send, Hash, Lock, Smile } from "lucide-react"
+import { Send, Hash, Lock, MessageCircle } from "lucide-react"
 import { format } from "date-fns"
 
 interface ChatPanelProps {
   teamId: string
   type: "group" | "private"
+  initialActiveChatId?: string | null
 }
 
-export function ChatPanel({ teamId, type }: ChatPanelProps) {
-  const { getTeamChats, sendMessage, currentUser, getUserById, teams } = useApp()
-  const chats = getTeamChats(teamId).filter((c) => c.type === type)
-  const team = teams.find((t) => t.id === teamId)
+export function ChatPanel({ teamId, type, initialActiveChatId }: ChatPanelProps) {
+  const { getTeamChats, sendMessage, currentUser, getUserById, teams, getUserRole, startPrivateChat } = useApp()
 
-  const [activeChatId, setActiveChatId] = useState<string | null>(chats[0]?.id ?? null)
+  const chats = getTeamChats(teamId)?.filter((c) => c.type === type) || []
+  const team = teams.find((t) => t.id === teamId)
+  const role = getUserRole(teamId, currentUser?.id ?? "")
+  const isAdmin = role === "admin"
+
+  const [activeChatId, setActiveChatId] = useState<string | null>(initialActiveChatId ?? null)
   const [message, setMessage] = useState("")
-  const [typingUser, setTypingUser] = useState<string | null>(null)
+  const [fetchedMembers, setFetchedMembers] = useState<TeamMember[]>([])
   const scrollRef = useRef<HTMLDivElement>(null)
 
   const activeChat = chats.find((c) => c.id === activeChatId)
 
+  // ═══════════════════════════════════════════════
+  // FETCH POPULATED MEMBERS FOR PRIVATE SIDEBAR
+  // ═══════════════════════════════════════════════
+  useEffect(() => {
+    if (type !== "private" || !teamId) return
+    const fetchMembers = async () => {
+      try {
+        const token = localStorage.getItem("token") || ""
+        const res = await fetch(`http://localhost:5000/api/teams/${teamId}/members`, {
+          headers: { Authorization: `Bearer ${token}` },
+        })
+        const data = await res.json()
+        if (Array.isArray(data)) setFetchedMembers(data)
+      } catch (err) {
+        console.error("Failed to fetch members:", err)
+      }
+    }
+    fetchMembers()
+  }, [type, teamId])
+
+  // Members to show in private chat sidebar (populated with names)
+  const sidebarMembers = type === "private"
+    ? fetchedMembers.filter((m) => {
+        const memberId = m.userId?._id || (m.userId as any)
+        if (memberId === currentUser?.id) return false
+        // Admin sees all members; Regular member sees only admin
+        if (!isAdmin && m.role !== "admin") return false
+        return true
+      })
+    : []
+
+  // Get the existing private chat for a specific member
+  const getMemberChat = (memberId: string) => {
+    if (!currentUser) return undefined
+    const ids = [currentUser.id, memberId].sort()
+    const chatId = `private_${teamId}_${ids[0]}_${ids[1]}`
+    return chats.find((c) => c.id === chatId)
+  }
+
+  // Auto select first chat
+  useEffect(() => {
+    if (chats.length > 0 && !activeChatId) {
+      setActiveChatId(chats[0].id)
+    }
+  }, [chats, activeChatId])
+
+  // Auto scroll to bottom
   useEffect(() => {
     if (scrollRef.current) {
       scrollRef.current.scrollTop = scrollRef.current.scrollHeight
@@ -38,226 +89,258 @@ export function ChatPanel({ teamId, type }: ChatPanelProps) {
     if (!message.trim() || !activeChatId) return
     sendMessage(activeChatId, message)
     setMessage("")
-    const otherParticipant = activeChat?.participants.find((p) => p !== currentUser?.id)
-    if (otherParticipant) {
-      const user = getUserById(otherParticipant)
-      setTypingUser(user?.name ?? null)
-      setTimeout(() => setTypingUser(null), 2000)
-    }
+  }
+
+  const handleStartPrivateChat = (memberId: string) => {
+    const chatId = startPrivateChat(teamId, memberId)
+    setActiveChatId(chatId)
   }
 
   const getChatName = (chat: ChatRoom) => {
     if (chat.type === "group") return chat.name ?? "General"
-    const otherUserId = chat.participants.find((p) => p !== currentUser?.id)
-    return otherUserId ? getUserById(otherUserId)?.name ?? "Unknown" : "Unknown"
+
+    const otherUserId = chat.participants.find(
+      (p) => p !== currentUser?.id
+    )
+
+    // Try fetched (populated) members first for display name
+    const fetchedMember = fetchedMembers.find(
+      (m) => (m.userId?._id || (m.userId as any)) === otherUserId
+    )
+    if (fetchedMember?.userId?.name) return fetchedMember.userId.name
+
+    return otherUserId
+      ? getUserById(otherUserId)?.name ?? "Unknown"
+      : "Unknown"
   }
 
-  const memberList = type === "private" ? team?.members.filter((m) => m.userId !== currentUser?.id) : null
+  const getChatInitial = (chat: ChatRoom) => {
+    const name = getChatName(chat)
+    return name.charAt(0).toUpperCase()
+  }
 
-  return (
-    <div className="flex h-[calc(100vh-12rem)] overflow-hidden rounded-2xl border border-border/40 bg-card shadow-sm">
-      {/* Sidebar */}
-      <div className="flex w-56 flex-col border-r border-border/30 bg-background/50 lg:w-64">
-        <div className="border-b border-border/30 p-4">
-          <p className="text-xs font-semibold uppercase tracking-widest text-muted-foreground/70">
-            {type === "group" ? "Channels" : "Direct Messages"}
-          </p>
+  // ═══════════════════════════════════════════════
+  // EMPTY STATES
+  // ═══════════════════════════════════════════════
+
+  // Private chat — no available members (solo team)
+  if (type === "private" && sidebarMembers.length === 0 && fetchedMembers.length > 0) {
+    return (
+      <div className="flex h-[calc(100vh-12rem)] items-center justify-center rounded-2xl border bg-card">
+        <div className="flex flex-col items-center gap-3 text-muted-foreground">
+          <Lock className="h-10 w-10 opacity-30" />
+          <p className="text-sm">No members available for private chat</p>
         </div>
+      </div>
+    )
+  }
+
+  // Private chat — still loading members
+  if (type === "private" && fetchedMembers.length === 0) {
+    return (
+      <div className="flex h-[calc(100vh-12rem)] items-center justify-center rounded-2xl border bg-card">
+        <p className="text-sm text-muted-foreground animate-pulse">Loading members...</p>
+      </div>
+    )
+  }
+
+  // Group empty state
+  if (type === "group" && chats.length === 0) {
+    return (
+      <div className="flex h-[calc(100vh-12rem)] items-center justify-center text-muted-foreground">
+        No chats available for this team
+      </div>
+    )
+  }
+
+  // ═══════════════════════════════════════════════
+  // MAIN CHAT UI
+  // ═══════════════════════════════════════════════
+  return (
+    <div className="flex h-[calc(100vh-12rem)] overflow-hidden rounded-2xl border bg-card">
+
+      {/* Sidebar */}
+      <div className="flex w-64 flex-col border-r">
+        <div className="flex items-center justify-between p-4">
+          <span className="text-xs font-semibold uppercase text-muted-foreground">
+            {type === "group" ? "Channels" : "Direct Messages"}
+          </span>
+        </div>
+
         <ScrollArea className="flex-1">
-          <div className="flex flex-col gap-0.5 p-2">
-            {chats.map((chat) => {
-              const isActive = activeChatId === chat.id
-              return (
-                <button
-                  key={chat.id}
-                  onClick={() => setActiveChatId(chat.id)}
-                  className={cn(
-                    "relative flex items-center gap-2.5 rounded-xl px-3 py-2.5 text-sm transition-all duration-200",
-                    isActive
-                      ? "bg-primary/10 text-primary shadow-sm"
-                      : "text-muted-foreground hover:bg-accent/50 hover:text-foreground",
-                  )}
-                >
-                  {isActive && (
-                    <div className="absolute left-0 top-1/2 h-5 w-[3px] -translate-y-1/2 rounded-r-full bg-primary" />
-                  )}
-                  {type === "group" ? (
-                    <Hash className="h-4 w-4 shrink-0" />
-                  ) : (
-                    <Avatar className="h-7 w-7 shrink-0">
-                      <AvatarFallback className={cn(
-                        "text-[10px] font-bold",
-                        isActive ? "bg-primary/20 text-primary" : "bg-muted text-muted-foreground"
-                      )}>
-                        {getChatName(chat).split(" ").map((n) => n[0]).join("")}
+          <div className="p-2 space-y-1">
+            {type === "private" ? (
+              // ── Member-list sidebar for Private Chat ──
+              sidebarMembers.map((member) => {
+                const memberId = member.userId?._id || (member.userId as any)
+                const memberChat = getMemberChat(memberId)
+                const isActive = memberChat && activeChatId === memberChat.id
+                const lastMsg = memberChat?.messages[memberChat.messages.length - 1]
+                const memberName = member.userId?.name ?? "Unknown"
+
+                return (
+                  <button
+                    key={memberId}
+                    onClick={() => handleStartPrivateChat(memberId)}
+                    className={cn(
+                      "flex w-full items-center gap-2.5 rounded-xl p-2.5 text-left transition-all",
+                      isActive
+                        ? "bg-primary/10 text-primary shadow-sm"
+                        : "hover:bg-accent/50"
+                    )}
+                  >
+                    <Avatar className="h-8 w-8 shrink-0">
+                      <AvatarFallback className="bg-primary/10 text-xs font-bold text-primary">
+                        {memberName.charAt(0).toUpperCase()}
                       </AvatarFallback>
                     </Avatar>
-                  )}
-                  <span className="truncate font-medium">{getChatName(chat)}</span>
-                </button>
-              )
-            })}
-            {type === "private" && memberList && (
-              <>
-                <div className="px-3 pb-1 pt-4">
-                  <p className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground/60">
-                    Start a chat
-                  </p>
-                </div>
-                {memberList
-                  .filter((m) => !chats.some((c) => c.participants.includes(m.userId)))
-                  .map((member) => {
-                    const user = getUserById(member.userId)
-                    return (
-                      <button
-                        key={member.userId}
-                        className="flex items-center gap-2.5 rounded-xl px-3 py-2.5 text-sm text-muted-foreground transition-colors hover:bg-accent/50 hover:text-foreground"
-                      >
-                        <Avatar className="h-7 w-7 shrink-0">
-                          <AvatarFallback className="bg-muted text-[10px] font-bold text-muted-foreground">
-                            {user?.avatar}
-                          </AvatarFallback>
-                        </Avatar>
-                        <span className="truncate">{user?.name}</span>
-                      </button>
-                    )
-                  })}
-              </>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-1.5">
+                        <p className="text-sm font-medium truncate">{memberName}</p>
+                        <span className="shrink-0 rounded-md bg-muted px-1.5 py-0.5 text-[9px] font-semibold uppercase text-muted-foreground">
+                          {member.role}
+                        </span>
+                      </div>
+                      {lastMsg && (
+                        <p className="text-[11px] text-muted-foreground truncate">
+                          {lastMsg.senderName?.split(" ")[0]}: {lastMsg.content}
+                        </p>
+                      )}
+                    </div>
+                  </button>
+                )
+              })
+            ) : (
+              // ── Chat-list sidebar for Group Chat ──
+              chats.map((chat) => {
+                const isActive = activeChatId === chat.id
+                const lastMsg = chat.messages[chat.messages.length - 1]
+
+                return (
+                  <button
+                    key={chat.id}
+                    onClick={() => setActiveChatId(chat.id)}
+                    className={cn(
+                      "flex w-full items-center gap-2.5 rounded-xl p-2.5 text-left transition-all",
+                      isActive
+                        ? "bg-primary/10 text-primary shadow-sm"
+                        : "hover:bg-accent/50"
+                    )}
+                  >
+                    <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-primary/10">
+                      <Hash className="h-4 w-4 text-primary" />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-medium truncate">{getChatName(chat)}</p>
+                      {lastMsg && (
+                        <p className="text-[11px] text-muted-foreground truncate">
+                          {lastMsg.senderName?.split(" ")[0]}: {lastMsg.content}
+                        </p>
+                      )}
+                    </div>
+                  </button>
+                )
+              })
             )}
           </div>
         </ScrollArea>
       </div>
 
-      {/* Chat area */}
+      {/* Chat Area */}
       <div className="flex flex-1 flex-col">
+
         {/* Header */}
-        <div className="flex items-center gap-3 border-b border-border/30 bg-background/30 px-5 py-3.5">
-          {type === "group" ? (
+        <div className="flex items-center gap-3 border-b px-4 py-3">
+          {activeChat && type === "private" && (
+            <Avatar className="h-8 w-8">
+              <AvatarFallback className="bg-primary/10 text-xs font-bold text-primary">
+                {getChatInitial(activeChat)}
+              </AvatarFallback>
+            </Avatar>
+          )}
+          {activeChat && type === "group" && (
             <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary/10">
               <Hash className="h-4 w-4 text-primary" />
-            </div>
-          ) : (
-            <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-muted">
-              <Lock className="h-3.5 w-3.5 text-muted-foreground" />
             </div>
           )}
           <div>
             <p className="font-semibold text-foreground">
-              {activeChat ? getChatName(activeChat) : "Select a chat"}
+              {activeChat ? getChatName(activeChat) : "Select a conversation"}
             </p>
-            {activeChat && (
-              <p className="text-xs text-muted-foreground">
-                {activeChat.participants.length} {activeChat.participants.length === 1 ? "member" : "members"}
-              </p>
+            {activeChat && type === "private" && (
+              <p className="text-xs text-muted-foreground">Private conversation</p>
             )}
           </div>
         </div>
 
         {/* Messages */}
-        <div ref={scrollRef} className="flex-1 overflow-y-auto px-5 py-4">
-          {activeChat ? (
-            <div className="flex flex-col gap-5">
-              {activeChat.messages.map((msg, i) => {
-                const isOwn = msg.senderId === currentUser?.id
-                const showAvatar = i === 0 || activeChat.messages[i - 1]?.senderId !== msg.senderId
-                return (
-                  <div
-                    key={msg.id}
-                    className={cn("flex items-end gap-2.5", isOwn ? "flex-row-reverse" : "")}
-                  >
-                    {showAvatar ? (
-                      <Avatar className="h-8 w-8 shrink-0">
-                        <AvatarFallback
-                          className={cn(
-                            "text-xs font-bold",
-                            isOwn ? "bg-primary text-primary-foreground" : "bg-accent text-accent-foreground"
-                          )}
-                        >
-                          {msg.senderAvatar}
-                        </AvatarFallback>
-                      </Avatar>
-                    ) : (
-                      <div className="w-8 shrink-0" />
-                    )}
-                    <div className={cn("flex max-w-[65%] flex-col gap-1", isOwn ? "items-end" : "")}>
-                      {showAvatar && (
-                        <div className={cn("flex items-center gap-2 px-1", isOwn ? "flex-row-reverse" : "")}>
-                          <span className="text-xs font-semibold text-foreground">{msg.senderName}</span>
-                          <span className="text-[10px] text-muted-foreground/60">
-                            {format(new Date(msg.timestamp), "h:mm a")}
-                          </span>
-                        </div>
-                      )}
-                      <div
-                        className={cn(
-                          "rounded-2xl px-4 py-2.5 text-sm leading-relaxed shadow-sm",
-                          isOwn
-                            ? "rounded-br-md bg-primary text-primary-foreground"
-                            : "rounded-bl-md bg-accent/70 text-foreground",
-                        )}
-                      >
-                        {msg.content}
-                      </div>
-                    </div>
-                  </div>
-                )
-              })}
-              {typingUser && (
-                <div className="flex items-center gap-2 px-10 text-xs text-muted-foreground">
-                  <div className="flex gap-1">
-                    <span className="inline-block h-1.5 w-1.5 animate-bounce rounded-full bg-primary/50" style={{ animationDelay: "0ms" }} />
-                    <span className="inline-block h-1.5 w-1.5 animate-bounce rounded-full bg-primary/50" style={{ animationDelay: "150ms" }} />
-                    <span className="inline-block h-1.5 w-1.5 animate-bounce rounded-full bg-primary/50" style={{ animationDelay: "300ms" }} />
-                  </div>
-                  <span>{typingUser} is typing</span>
-                </div>
-              )}
-            </div>
-          ) : (
-            <div className="flex h-full flex-col items-center justify-center gap-2 text-muted-foreground">
-              <MessageCircleIcon className="h-12 w-12 text-muted-foreground/30" />
-              <p className="text-sm">Select a conversation to start chatting</p>
+        <div ref={scrollRef} className="flex-1 overflow-y-auto p-4 space-y-4">
+          {!activeChat && (
+            <div className="flex flex-col items-center justify-center h-full gap-2 text-muted-foreground">
+              <MessageCircle className="h-10 w-10 opacity-30" />
+              <p className="text-sm">Select a member to start chatting</p>
             </div>
           )}
+          {activeChat?.messages.length === 0 && (
+            <div className="flex flex-col items-center justify-center h-full gap-2 text-muted-foreground">
+              <MessageCircle className="h-10 w-10 opacity-30" />
+              <p className="text-sm">No messages yet. Say hello!</p>
+            </div>
+          )}
+          {activeChat?.messages.map((msg) => {
+            const isOwn = msg.senderId === currentUser?.id
+
+            return (
+              <div
+                key={msg.id}
+                className={cn(
+                  "flex flex-col gap-1",
+                  isOwn ? "items-end" : "items-start"
+                )}
+              >
+                {!isOwn && (
+                  <span className="px-1 text-xs font-medium text-muted-foreground">
+                    {msg.senderName}
+                  </span>
+                )}
+                <div
+                  className={cn(
+                    "max-w-[75%] px-3.5 py-2 rounded-2xl text-sm leading-relaxed",
+                    isOwn
+                      ? "bg-primary text-primary-foreground rounded-br-md"
+                      : "bg-muted text-foreground rounded-bl-md"
+                  )}
+                >
+                  {msg.content}
+                </div>
+                <span className="px-1 text-[10px] text-muted-foreground/60">
+                  {format(new Date(msg.timestamp), "h:mm a")}
+                </span>
+              </div>
+            )
+          })}
         </div>
 
         {/* Input */}
-        <div className="border-t border-border/30 bg-background/30 p-4">
-          <form
-            onSubmit={(e) => {
-              e.preventDefault()
-              handleSend()
-            }}
-            className="flex items-center gap-2"
-          >
-            <div className="flex flex-1 items-center gap-2 rounded-xl border border-border/50 bg-background px-3 transition-colors focus-within:border-primary/40 focus-within:ring-1 focus-within:ring-primary/20">
-              <Smile className="h-4 w-4 shrink-0 text-muted-foreground/50" />
-              <Input
-                placeholder="Type a message..."
-                value={message}
-                onChange={(e) => setMessage(e.target.value)}
-                className="flex-1 border-0 bg-transparent px-0 shadow-none focus-visible:ring-0"
-              />
-            </div>
-            <Button
-              type="submit"
-              size="icon"
-              disabled={!message.trim()}
-              className="h-10 w-10 shrink-0 rounded-xl bg-primary text-primary-foreground shadow-md transition-all hover:bg-primary/90 hover:shadow-lg disabled:opacity-30 disabled:shadow-none"
-            >
-              <Send className="h-4 w-4" />
-            </Button>
-          </form>
-        </div>
+        <form
+          onSubmit={(e) => {
+            e.preventDefault()
+            handleSend()
+          }}
+          className="flex items-center gap-2 border-t px-4 py-3"
+        >
+          <Input
+            value={message}
+            onChange={(e) => setMessage(e.target.value)}
+            placeholder={type === "private" ? "Type a private message..." : "Type a message..."}
+            className="flex-1 rounded-xl"
+            disabled={!activeChatId}
+          />
+          <Button type="submit" size="icon" className="h-9 w-9 rounded-xl" disabled={!activeChatId}>
+            <Send className="h-4 w-4" />
+          </Button>
+        </form>
       </div>
     </div>
-  )
-}
-
-function MessageCircleIcon(props: React.SVGProps<SVGSVGElement>) {
-  return (
-    <svg {...props} xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-      <path d="M7.9 20A9 9 0 1 0 4 16.1L2 22Z" />
-    </svg>
   )
 }

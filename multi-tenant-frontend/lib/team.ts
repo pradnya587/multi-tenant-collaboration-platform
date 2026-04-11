@@ -33,5 +33,5 @@ export const joinTeamAPI = async (code: string) => {
 
 export const getMyTeamsAPI = async () => {
   const res = await API.get("/teams")
-  return res.data
+  return Array.isArray(res.data) ? res.data.map(normalizeTeam) : res.data
 }
