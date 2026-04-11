@@ -2,7 +2,11 @@
 
 import React, { createContext, useContext, useState, useCallback } from "react"
 import type { User, Team, Task, ChatRoom, Message, TaskStatus, Role } from "@/lib/types"
-import { mockUsers, mockTeams, mockTasks, mockChats } from "@/lib/mock-data"
+import { useEffect } from "react"
+import { createTeamAPI, joinTeamAPI } from "@/lib/team"
+import { getMyTeamsAPI } from "@/lib/team"
+
+
 
 interface AppContextType {
   currentUser: User | null
@@ -12,12 +16,12 @@ interface AppContextType {
   chats: ChatRoom[]
   users: User[]
   activeTeamId: string | null
-  login: (email: string, password: string) => boolean
-  register: (name: string, email: string, password: string) => boolean
+ login: (user: User) => void
+register: (user: User) => void
   logout: () => void
   setActiveTeamId: (id: string | null) => void
-  createTeam: (name: string, description: string) => Team
-  joinTeam: (code: string) => Team | null
+  createTeam: (name: string, description: string) => Promise<Team>
+  joinTeam: (code: string) => Promise<Team | null>
   addTask: (task: Omit<Task, "id" | "createdAt">) => void
   updateTaskStatus: (taskId: string, status: TaskStatus) => void
   deleteTask: (taskId: string) => void
@@ -30,39 +34,74 @@ interface AppContextType {
   getUserRole: (teamId: string, userId: string) => Role | undefined
 }
 
+
+//ORIGINAL
 const AppContext = createContext<AppContextType | undefined>(undefined)
 
 export function AppProvider({ children }: { children: React.ReactNode }) {
-  const [currentUser, setCurrentUser] = useState<User | null>(mockUsers[0])
-  const [isAuthenticated, setIsAuthenticated] = useState(true)
-  const [teams, setTeams] = useState<Team[]>(mockTeams)
-  const [tasks, setTasks] = useState<Task[]>(mockTasks)
-  const [chats, setChats] = useState<ChatRoom[]>(mockChats)
+ const [currentUser, setCurrentUser] = useState<User | null>(null)
+ const [isAuthenticated, setIsAuthenticated] = useState(false)
+  const [teams, setTeams] = useState<Team[]>([])
+const [tasks, setTasks] = useState<Task[]>([])
+const [chats, setChats] = useState<ChatRoom[]>([])
   const [activeTeamId, setActiveTeamId] = useState<string | null>(null)
-  const users = mockUsers
+  const [users, setUsers] = useState<User[]>([])
 
-  const login = useCallback((email: string, _password: string) => {
-    const user = mockUsers.find((u) => u.email === email)
-    if (user) {
-      setCurrentUser(user)
+  useEffect(() => {
+  const token = localStorage.getItem("token")
+  const user = localStorage.getItem("user")
+
+  if (token && user && user !== "undefined") {
+    try {
+      const parsedUser = JSON.parse(user)
+      setCurrentUser(parsedUser)
       setIsAuthenticated(true)
-      return true
+      setUsers([parsedUser])
+    } catch {
+      localStorage.removeItem("user")
     }
-    return false
-  }, [])
+  }
+}, [])
 
-  const register = useCallback((name: string, email: string, _password: string) => {
-    const newUser: User = {
-      id: `u${Date.now()}`,
-      name,
-      email,
-      avatar: name.split(" ").map((n) => n[0]).join("").toUpperCase(),
-      status: "online",
+useEffect(() => {
+  const loadTeams = async () => {
+    try {
+      const data = await getMyTeamsAPI()
+      setTeams(data)
+    } catch (err) {
+      console.error("Failed to load teams:", err)
     }
-    setCurrentUser(newUser)
-    setIsAuthenticated(true)
-    return true
-  }, [])
+  }
+
+  if (currentUser) {
+    loadTeams()
+  }
+}, [currentUser])
+
+
+ const login = useCallback((user: any) => {
+  const formattedUser = {
+    ...user,
+    id: user._id, // ✅ ADD THIS LINE
+  }
+
+  setCurrentUser(formattedUser)
+  setIsAuthenticated(true)
+  setUsers([formattedUser])
+  localStorage.setItem("user", JSON.stringify(formattedUser))
+}, [])
+
+  const register = useCallback((user: any) => {
+  const formattedUser = {
+    ...user,
+    id: user._id,
+  }
+
+  setCurrentUser(formattedUser)
+  setIsAuthenticated(true)
+  setUsers([formattedUser])
+  localStorage.setItem("user", JSON.stringify(formattedUser))
+}, [])
 
   const logout = useCallback(() => {
     setCurrentUser(null)
@@ -70,48 +109,56 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     setActiveTeamId(null)
   }, [])
 
-  const createTeam = useCallback((name: string, description: string) => {
-    const team: Team = {
-      id: `t${Date.now()}`,
-      name,
-      description,
-      code: `${name.substring(0, 3).toUpperCase()}-${Date.now().toString().slice(-4)}-${Math.random().toString(36).substring(2, 5).toUpperCase()}`,
-      createdBy: currentUser!.id,
-      members: [{ userId: currentUser!.id, role: "admin", joinedAt: new Date().toISOString() }],
-    }
+  const createTeam = useCallback(async (name: string, description: string) => {
+  if (!currentUser) throw new Error("Not logged in")
+
+  try {
+    const team = await createTeamAPI(name, description)
+
     setTeams((prev) => [...prev, team])
+
+    // create default chat from backend response OR locally if needed
     const groupChat: ChatRoom = {
       id: `c${Date.now()}`,
-      teamId: team.id,
+      teamId: team.id,   // ✅ FIXED
       type: "group",
-      participants: [currentUser!.id],
+      participants: [currentUser.id],
       name: "General",
       messages: [],
     }
-    setChats((prev) => [...prev, groupChat])
-    return team
-  }, [currentUser])
 
-  const joinTeam = useCallback((code: string) => {
-    const team = teams.find((t) => t.code === code)
-    if (team && currentUser && !team.members.some((m) => m.userId === currentUser.id)) {
-      const updated = teams.map((t) =>
-        t.id === team.id
-          ? { ...t, members: [...t.members, { userId: currentUser.id, role: "member" as Role, joinedAt: new Date().toISOString() }] }
-          : t,
-      )
-      setTeams(updated)
-      setChats((prev) =>
-        prev.map((c) =>
-          c.teamId === team.id && c.type === "group"
-            ? { ...c, participants: [...c.participants, currentUser.id] }
-            : c,
-        ),
-      )
-      return updated.find((t) => t.id === team.id)!
-    }
-    return team ?? null
-  }, [teams, currentUser])
+    setChats((prev) => [...prev, groupChat])
+
+    return team
+  } catch (err) {
+    console.error("createTeam failed:", err)
+    throw err
+  }
+}, [currentUser])
+
+
+  const joinTeam = useCallback(async (code: string) => {
+  if (!currentUser) throw new Error("Not logged in")
+
+  try {
+    const team = await joinTeamAPI(code)
+
+    if (!team) return null
+
+    // avoid duplicates
+    setTeams((prev) => {
+      const exists = prev.find((t) => t.id === team.id)
+      if (exists) return prev
+      return [...prev, team]
+    })
+
+    return team
+  } catch (err) {
+    console.error("joinTeam failed:", err)
+    return null
+  }
+}, [currentUser])
+
 
   const addTask = useCallback((task: Omit<Task, "id" | "createdAt">) => {
     setTasks((prev) => [...prev, { ...task, id: `tk${Date.now()}`, createdAt: new Date().toISOString() }])
@@ -170,6 +217,9 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     },
     [teams],
   )
+
+
+ 
 
   return (
     <AppContext.Provider

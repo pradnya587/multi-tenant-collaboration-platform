@@ -8,17 +8,26 @@ export interface User {
   status: "online" | "offline" | "away"
 }
 
-export interface Team {
-  id: string
+export type Team = {
+  _id?: string
+  id?: string
   name: string
   description: string
   code: string
   createdBy: string
-  members: TeamMember[]
+  members: {
+    userId: string
+    role: string
+    joinedAt: string
+  }[]
 }
 
 export interface TeamMember {
-  userId: string
+  userId: {
+    _id: string
+    name: string
+    email: string
+  }
   role: Role
   joinedAt: string
 }
@@ -42,6 +51,8 @@ export interface ChatRoom {
   name?: string
 }
 
+
+ 
 export type TaskStatus = "todo" | "in-progress" | "completed"
 
 export interface Task {

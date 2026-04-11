@@ -31,17 +31,25 @@ export function CreateTeamModal({ open, onClose }: CreateTeamModalProps) {
   const [isCreating, setIsCreating] = useState(false)
 
   const handleCreate = async () => {
-    if (!name.trim()) {
-      toast.error("Team name is required")
-      return
-    }
-    setIsCreating(true)
-    await new Promise((r) => setTimeout(r, 500))
-    const team = createTeam(name, description)
-    setCreatedCode(team.code)
-    setIsCreating(false)
-    toast.success("Team created successfully!")
+  if (!name.trim()) {
+    toast.error("Team name is required")
+    return
   }
+
+  setIsCreating(true)
+
+  try {
+    const team = await createTeam(name, description) // ✅ FIX
+
+    setCreatedCode(team.code)
+    toast.success("Team created successfully!")
+  } catch (err: any) {
+    console.error(err)
+    toast.error("Failed to create team")
+  }
+
+  setIsCreating(false)
+}
 
   const handleCopy = () => {
     if (createdCode) {

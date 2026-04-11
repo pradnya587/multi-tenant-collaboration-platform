@@ -16,6 +16,7 @@ import { Progress } from "@/components/ui/progress"
 import { Avatar, AvatarFallback } from "@/components/ui/avatar"
 import { Plus, UserPlus, Users, MessageCircle, CheckSquare, ArrowUpRight } from "lucide-react"
 
+
 export default function Home() {
   const { isAuthenticated, currentUser, teams, tasks, getUserById } = useApp()
   const [activePage, setActivePage] = useState<NavPage>("dashboard")
@@ -23,9 +24,12 @@ export default function Home() {
   const [createOpen, setCreateOpen] = useState(false)
   const [joinOpen, setJoinOpen] = useState(false)
 
-  if (!isAuthenticated || !currentUser) {
-    return <AuthScreen onSuccess={() => {}} />
-  }
+ const [refresh, setRefresh] = useState(false)
+
+if (!isAuthenticated || !currentUser) {
+  return <AuthScreen onSuccess={() => window.location.reload()} />
+}
+
 
   if (activeTeamId) {
     return (

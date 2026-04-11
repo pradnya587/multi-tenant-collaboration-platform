@@ -49,30 +49,34 @@ export const register = async (req, res) => {
 export const login = async (req, res) => {
   try {
     console.log("🟢 Login API hit");
-    console.log("BODY:", req.body); // DEBUG
+    console.log("BODY:", req.body);
 
     const { email, password } = req.body;
 
-    // ✅ Check user exists
     const user = await User.findOne({ email });
     if (!user) {
       return res.status(400).json({ message: "User not found" });
     }
 
-    // ✅ Compare password
     const isMatch = await bcrypt.compare(password, user.password);
     if (!isMatch) {
       return res.status(400).json({ message: "Invalid password" });
     }
 
-    // ✅ Generate token
     const token = jwt.sign(
       { userId: user._id },
       process.env.JWT_SECRET,
       { expiresIn: "1d" }
     );
 
-    res.json({ token });
+    // ✅ REMOVE PASSWORD (IMPORTANT)
+    const { password: pwd, ...userData } = user._doc;
+
+    // ✅ SEND BOTH TOKEN + USER
+    res.json({
+      token,
+      user: userData,
+    });
 
   } catch (error) {
     console.error("❌ Login Error:", error);

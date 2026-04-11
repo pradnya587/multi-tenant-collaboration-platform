@@ -27,13 +27,16 @@ export function JoinTeamModal({ open, onClose }: JoinTeamModalProps) {
   const [isLoading, setIsLoading] = useState(false)
 
   const handleJoin = async () => {
-    if (!code.trim()) {
-      toast.error("Please enter a team code")
-      return
-    }
-    setIsLoading(true)
-    await new Promise((r) => setTimeout(r, 600))
-    const team = joinTeam(code)
+  if (!code.trim()) {
+    toast.error("Please enter a team code")
+    return
+  }
+
+  setIsLoading(true)
+
+  try {
+    const team = await joinTeam(code) // ✅ FIX
+
     if (team) {
       toast.success(`Joined "${team.name}" successfully!`)
       setCode("")
@@ -41,8 +44,13 @@ export function JoinTeamModal({ open, onClose }: JoinTeamModalProps) {
     } else {
       toast.error("Invalid team code. Please try again.")
     }
-    setIsLoading(false)
+  } catch (err: any) {
+    console.error(err)
+    toast.error("Failed to join team")
   }
+
+  setIsLoading(false)
+}
 
   return (
     <Dialog open={open} onOpenChange={onClose}>

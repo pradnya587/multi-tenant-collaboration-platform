@@ -5,6 +5,7 @@ import { cn } from "@/lib/utils"
 import { Avatar, AvatarFallback } from "@/components/ui/avatar"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
+import { useEffect } from "react"
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -14,6 +15,7 @@ import {
 import { MoreHorizontal, Shield, User, UserMinus, Copy, Check } from "lucide-react"
 import { toast } from "sonner"
 import { useState } from "react"
+import { TeamMember } from "@/lib/types"
 
 interface MembersPanelProps {
   teamId: string
@@ -24,6 +26,26 @@ export function MembersPanel({ teamId }: MembersPanelProps) {
   const team = teams.find((t) => t.id === teamId)
   const isAdmin = getUserRole(teamId, currentUser?.id ?? "") === "admin"
   const [copied, setCopied] = useState(false)
+  const [members, setMembers] = useState<TeamMember[]>([])
+
+  useEffect(() => {
+  const fetchMembers = async () => {
+    if (!teamId) return
+
+    try {
+      const res = await fetch(
+        `http://localhost:5000/api/teams/${teamId}/members`
+      )
+      const data = await res.json()
+      setMembers(data)
+    } catch (err) {
+      console.error("Failed to fetch members:", err)
+    }
+  }
+
+  fetchMembers()
+}, [teamId])
+  
 
   if (!team) return null
 
@@ -98,6 +120,8 @@ export function MembersPanel({ teamId }: MembersPanelProps) {
                             ? "bg-warning"
                             : "bg-muted-foreground/40",
                       )}
+
+                      
                     />
                   </div>
                   <div>

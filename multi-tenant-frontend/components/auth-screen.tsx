@@ -64,9 +64,9 @@ export function AuthScreen({ onSuccess }: AuthScreenProps) {
       // store token
       localStorage.setItem("token", data.token)
 
-      // ✅ ADD THIS LINE
-      login(email, password)
-
+// ✅ CORRECT
+      login(data.user)
+      
       toast.success("Welcome back!")
       onSuccess()
 
@@ -90,7 +90,7 @@ export function AuthScreen({ onSuccess }: AuthScreenProps) {
       }
 
       // ✅ ADD THIS LINE
-      register(name, email, password)
+      register(data)
 
       toast.success("Account created!")
       onSuccess()
