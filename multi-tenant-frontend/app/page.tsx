@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { useApp } from "@/context/app-context"
 import { cn } from "@/lib/utils"
 import { AuthScreen } from "@/components/auth-screen"
@@ -23,7 +23,7 @@ export default function Home() {
   const [activeTeamId, setActiveTeamId] = useState<string | null>(null)
   const [createOpen, setCreateOpen] = useState(false)
   const [joinOpen, setJoinOpen] = useState(false)
-
+const [initialTab, setInitialTab] = useState("chat")
  const [refresh, setRefresh] = useState(false)
 
 if (!isAuthenticated || !currentUser) {
@@ -43,9 +43,10 @@ if (!isAuthenticated || !currentUser) {
         />
         <main className="flex-1 overflow-hidden">
           <TeamWorkspace
-            teamId={activeTeamId}
-            onBack={() => setActiveTeamId(null)}
-          />
+  teamId={activeTeamId}
+  initialTab={initialTab}
+  onBack={() => setActiveTeamId(null)}
+/>
         </main>
       </div>
     )
@@ -160,83 +161,23 @@ if (!isAuthenticated || !currentUser) {
           </div>
         )}
 
+
+
+
         {activePage === "tasks" && (
-          <div className="flex flex-col gap-8 p-8">
-            <div>
-              <h1 className="text-2xl font-bold tracking-tight text-foreground">All My Tasks</h1>
-              <p className="mt-1 text-sm text-muted-foreground">Tasks assigned to you across all teams</p>
-            </div>
-            {(() => {
-              const myTasks = tasks.filter((t) => t.assigneeId === currentUser.id)
-              if (myTasks.length === 0) {
-                return (
-                  <div className="rounded-2xl border border-border/40 bg-card">
-                    <div className="flex flex-col items-center justify-center py-20">
-                      <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-muted">
-                        <CheckSquare className="h-8 w-8 text-muted-foreground" />
-                      </div>
-                      <p className="mt-4 text-lg font-semibold text-foreground">No tasks assigned</p>
-                      <p className="mt-1 text-sm text-muted-foreground">Tasks assigned to you will appear here.</p>
-                    </div>
-                  </div>
-                )
-              }
-              return (
-                <div className="rounded-2xl border border-border/40 bg-card">
-                  <div className="divide-y divide-border/30">
-                    {myTasks.map((task) => {
-                      const team = teams.find((t) => t.id === task.teamId)
-                      return (
-                        <div
-                          key={task.id}
-                          className="flex items-center justify-between px-6 py-4 transition-colors hover:bg-accent/20"
-                        >
-                          <div className="flex items-center gap-4 min-w-0 flex-1">
-                            <div
-                              className={cn(
-                                "h-2.5 w-2.5 shrink-0 rounded-full",
-                                task.status === "completed"
-                                  ? "bg-success"
-                                  : task.status === "in-progress"
-                                    ? "bg-primary"
-                                    : "bg-muted-foreground/30",
-                              )}
-                            />
-                            <div className="min-w-0 flex-1">
-                              <div className="flex items-center gap-2">
-                                <p className={cn(
-                                  "font-medium",
-                                  task.status === "completed" ? "text-muted-foreground line-through" : "text-foreground",
-                                )}>{task.title}</p>
-                                <Badge variant="outline" className="shrink-0 text-[10px] border-border/50 text-muted-foreground">
-                                  {team?.name}
-                                </Badge>
-                              </div>
-                              <p className="mt-0.5 truncate text-sm text-muted-foreground">{task.description}</p>
-                            </div>
-                          </div>
-                          <Badge
-                            variant="outline"
-                            className={cn(
-                              "ml-4 shrink-0 text-xs font-medium",
-                              task.status === "completed"
-                                ? "border-success/30 text-success"
-                                : task.status === "in-progress"
-                                  ? "border-primary/30 text-primary"
-                                  : "border-border text-muted-foreground",
-                            )}
-                          >
-                            {task.status === "in-progress" ? "In Progress" : task.status === "todo" ? "To Do" : "Done"}
-                          </Badge>
-                        </div>
-                      )
-                    })}
-                  </div>
-                </div>
-              )
-            })()}
-          </div>
-        )}
+  <TasksSection
+    currentUser={currentUser}
+    teams={teams}
+   onOpenTeam={(id: string, tab: string) => {
+  setActiveTeamId(id)
+  setInitialTab(tab)
+}}
+  />
+)}
+
+
+
+
 
         {activePage === "chat" && (
           <div className="flex flex-col gap-8 p-8">
@@ -259,7 +200,10 @@ if (!isAuthenticated || !currentUser) {
                 {myTeams.map((team) => (
                   <button
                     key={team.id}
-                    onClick={() => setActiveTeamId(team.id)}
+                    onClick={() => {
+  setInitialTab("group-chat")  // 🔥 RESET
+  setActiveTeamId(team.id)
+}}
                     className="group flex items-center gap-4 rounded-2xl border border-border/40 bg-card p-5 text-left transition-all duration-200 hover:border-primary/30 hover:shadow-md"
                   >
                     <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-primary/10 text-lg font-bold text-primary transition-colors group-hover:bg-primary/15">
@@ -280,8 +224,78 @@ if (!isAuthenticated || !currentUser) {
         {activePage === "profile" && <ProfileView />}
       </main>
 
+
       <CreateTeamModal open={createOpen} onClose={() => setCreateOpen(false)} />
       <JoinTeamModal open={joinOpen} onClose={() => setJoinOpen(false)} />
+    </div>
+  )
+}
+
+
+
+
+
+function TasksSection({ currentUser, teams, onOpenTeam }: any) {
+  const [tasks, setTasks] = useState<any[]>([])
+
+  const BASE_URL = "http://192.168.43.236:5000"
+
+  useEffect(() => {
+    const fetchTasks = async () => {
+      try {
+        const res = await fetch(
+          `${BASE_URL}/api/tasks/user/${currentUser.id}`
+        )
+        const data = await res.json()
+        setTasks(data)
+      } catch (err) {
+        console.error(err)
+      }
+    }
+
+    fetchTasks()
+  }, [currentUser])
+
+  return (
+    <div className="flex flex-col gap-8 p-8">
+      <div>
+        <h1 className="text-2xl font-bold">All My Tasks</h1>
+        <p className="text-muted-foreground">
+          Tasks assigned to you across all teams
+        </p>
+      </div>
+
+      {tasks.length === 0 ? (
+        <div className="text-center text-gray-400 mt-20">
+          No tasks assigned
+        </div>
+      ) : (
+        <div className="rounded-2xl border bg-card">
+          {tasks.map((task) => {
+            const team = teams.find((t) => t.id === task.teamId)
+
+            return (
+              <div
+                key={task._id}
+              onClick={() => onOpenTeam(task.teamId, "tasks")}
+                className="flex justify-between items-center px-6 py-4 cursor-pointer hover:bg-accent"
+              >
+                <div>
+                  <p className="font-semibold">{task.title}</p>
+                  <p className="text-sm text-gray-500">
+                    {task.description}
+                  </p>
+                  <p className="text-xs text-gray-400">
+                    Team: {team?.name}
+                  </p>
+                </div>
+
+                <span className="text-sm">{task.status}</span>
+              </div>
+            )
+          })}
+        </div>
+      )}
     </div>
   )
 }

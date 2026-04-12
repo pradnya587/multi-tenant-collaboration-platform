@@ -16,14 +16,14 @@ interface TeamWorkspaceProps {
   onBack: () => void
 }
 
-export function TeamWorkspace({ teamId, onBack }: TeamWorkspaceProps) {
+export function TeamWorkspace({ teamId, onBack, initialTab = "chat" }: any) {
   const { teams, currentUser, getUserRole, startPrivateChat } = useApp()
   const team = teams.find((t) => t.id === teamId)
   const role = getUserRole(teamId, currentUser?.id ?? "")
   const showPrivateTab = (team?.members?.length ?? 0) > 1
 
   // Controlled tab state — allows Members panel "Message" button to switch to Private Chat
-  const [activeTab, setActiveTab] = useState("group-chat")
+  const [activeTab, setActiveTab] = useState(initialTab || "group-chat")
   const [privateChatTarget, setPrivateChatTarget] = useState<string | null>(null)
 
   // Called when user clicks "Message" on a member in the Members panel

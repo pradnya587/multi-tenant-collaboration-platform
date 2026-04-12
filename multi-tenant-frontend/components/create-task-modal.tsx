@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { useApp } from "@/context/app-context"
 import {
   Dialog,
@@ -14,7 +14,13 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select"
 import { ClipboardList, Loader2 } from "lucide-react"
 import { toast } from "sonner"
 
@@ -24,38 +30,98 @@ interface CreateTaskModalProps {
   teamId: string
 }
 
-export function CreateTaskModal({ open, onClose, teamId }: CreateTaskModalProps) {
-  const { addTask, currentUser, teams, getUserById } = useApp()
-  const team = teams.find((t) => t.id === teamId)
+export function CreateTaskModal({
+  open,
+  onClose,
+  teamId,
+}: CreateTaskModalProps) {
+  const { currentUser, getUserRole } = useApp()
+
+  const role = getUserRole(teamId, currentUser?.id || "")
+
   const [title, setTitle] = useState("")
   const [description, setDescription] = useState("")
   const [assigneeId, setAssigneeId] = useState("")
   const [deadline, setDeadline] = useState("")
+  const [members, setMembers] = useState<any[]>([])
   const [isCreating, setIsCreating] = useState(false)
+
+  const BASE_URL = "http://192.168.43.236:5000"
+
+  // 🔥 FETCH MEMBERS
+  useEffect(() => {
+    const fetchMembers = async () => {
+      try {
+        const token = localStorage.getItem("token")
+
+        const res = await fetch(
+          `${BASE_URL}/api/teams/${teamId}/members`,
+          {
+            headers: {
+              Authorization: `Bearer ${token}`,
+            },
+          }
+        )
+
+        const data = await res.json()
+        console.log("Members:", data)
+
+        setMembers(data)
+      } catch (err) {
+        console.error(err)
+        toast.error("Failed to load members")
+      }
+    }
+
+    if (teamId && open) fetchMembers()
+  }, [teamId, open])
 
   const handleCreate = async () => {
     if (!title.trim()) {
       toast.error("Title is required")
       return
     }
+
     setIsCreating(true)
-    await new Promise((r) => setTimeout(r, 400))
-    addTask({
-      teamId,
-      title,
-      description,
-      status: "todo",
-      assigneeId: assigneeId || currentUser!.id,
-      createdBy: currentUser!.id,
-      deadline: deadline || new Date().toISOString().split("T")[0],
-    })
-    toast.success("Task created!")
-    setTitle("")
-    setDescription("")
-    setAssigneeId("")
-    setDeadline("")
+
+    try {
+      const res = await fetch(`${BASE_URL}/api/tasks`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          title,
+          description,
+          teamId,
+          status: "todo",
+          assigneeId: assigneeId || currentUser?.id,
+          createdBy: currentUser?.id,
+          deadline: deadline || new Date().toISOString(),
+          role,
+        }),
+      })
+
+      const data = await res.json()
+
+      if (!res.ok) {
+        throw new Error(data.message || "Failed to create task")
+      }
+
+      toast.success("Task created!")
+
+      setTitle("")
+      setDescription("")
+      setAssigneeId("")
+      setDeadline("")
+
+      onClose()
+    } catch (err: any) {
+      console.error(err)
+      toast.error(err.message || "Error creating task")
+    }
+
     setIsCreating(false)
-    onClose()
   }
 
   return (
@@ -69,41 +135,54 @@ export function CreateTaskModal({ open, onClose, teamId }: CreateTaskModalProps)
             Add a new task to the board.
           </DialogDescription>
         </DialogHeader>
+
         <div className="flex flex-col gap-5">
+          {/* Title */}
           <div className="flex flex-col gap-2">
-            <Label className="text-sm font-medium text-foreground">Title</Label>
-            <Input placeholder="Task title" value={title} onChange={(e) => setTitle(e.target.value)} className="h-11 rounded-xl" />
+            <Label>Title</Label>
+            <Input value={title} onChange={(e) => setTitle(e.target.value)} />
           </div>
+
+          {/* Description */}
           <div className="flex flex-col gap-2">
-            <Label className="text-sm font-medium text-foreground">Description</Label>
-            <Textarea placeholder="Describe the task..." value={description} onChange={(e) => setDescription(e.target.value)} rows={3} className="rounded-xl" />
+            <Label>Description</Label>
+            <Textarea value={description} onChange={(e) => setDescription(e.target.value)} />
           </div>
+
+          {/* ✅ FIXED DROPDOWN */}
           <div className="flex flex-col gap-2">
-            <Label className="text-sm font-medium text-foreground">Assign To</Label>
+            <Label>Assign To</Label>
             <Select value={assigneeId} onValueChange={setAssigneeId}>
-              <SelectTrigger className="h-11 rounded-xl">
+              <SelectTrigger>
                 <SelectValue placeholder="Select member" />
               </SelectTrigger>
-              <SelectContent className="rounded-xl border-border/40">
-                {team?.members.map((m) => {
-                  const user = getUserById(m.userId)
-                  return (
-                    <SelectItem key={m.userId} value={m.userId} className="rounded-lg">
-                      {user?.name ?? "Unknown"}
-                    </SelectItem>
-                  )
-                })}
+              <SelectContent>
+                {members.map((m: any) => (
+                  <SelectItem key={m.userId?._id} value={m.userId?._id}>
+                    {m.userId?.name || "No Name"}
+                  </SelectItem>
+                ))}
               </SelectContent>
             </Select>
           </div>
+
+          {/* Deadline */}
           <div className="flex flex-col gap-2">
-            <Label className="text-sm font-medium text-foreground">Deadline</Label>
-            <Input type="date" value={deadline} onChange={(e) => setDeadline(e.target.value)} className="h-11 rounded-xl" />
+            <Label>Deadline</Label>
+            <Input
+              type="date"
+              value={deadline}
+              onChange={(e) => setDeadline(e.target.value)}
+            />
           </div>
+
           <DialogFooter>
-            <Button variant="outline" onClick={onClose} className="rounded-xl border-border/50">Cancel</Button>
-            <Button onClick={handleCreate} disabled={isCreating} className="rounded-xl bg-primary text-primary-foreground hover:bg-primary/90">
-              {isCreating ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+            <Button variant="outline" onClick={onClose}>
+              Cancel
+            </Button>
+
+            <Button onClick={handleCreate} disabled={isCreating}>
+              {isCreating && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
               {isCreating ? "Creating..." : "Create Task"}
             </Button>
           </DialogFooter>
