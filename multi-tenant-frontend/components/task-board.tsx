@@ -26,10 +26,14 @@ export function TaskBoard({ teamId }: TaskBoardProps) {
 
   const { getUserRole, currentUser } = useApp();
 
+  const { teams } = useApp();
+
+const team = teams.find((t) => t.id === teamId);
+
   const role = getUserRole(teamId, currentUser?.id || "");
   const isAdmin = role === "admin";
 
-  const BASE_URL = "http://192.168.43.236:5000";
+  const BASE_URL = "http://localhost:5000"
 
   // 🔥 Fetch Tasks
   const fetchTasks = async () => {
@@ -70,10 +74,10 @@ export function TaskBoard({ teamId }: TaskBoardProps) {
 
     const task = tasks.find((t) => t._id === draggedTaskId);
 
-    if (!isAdmin && task?.assigneeId !== currentUser?.id) {
-      toast.error("You can only update your own tasks");
-      return;
-    }
+    if (task?.assigneeId !== currentUser?.id) {
+  toast.error("You can only update your own tasks");
+  return;
+}
 
     try {
       await fetch(`${BASE_URL}/api/tasks/${draggedTaskId}`, {
@@ -124,85 +128,95 @@ export function TaskBoard({ teamId }: TaskBoardProps) {
   };
 
   return (
-    <div className="p-4">
-      <div className="flex justify-between mb-4">
-        <h2 className="text-xl font-bold">Task Board</h2>
+  <div className="p-4">
+    <div className="flex justify-between mb-4">
+      <h2 className="text-xl font-bold">Task Board</h2>
 
-        {isAdmin && (
-          <Button onClick={() => setCreateOpen(true)}>
-            <Plus className="mr-2 h-4 w-4" />
-            Add Task
-          </Button>
-        )}
-      </div>
-
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        {columns.map((col) => {
-          const colTasks = tasks.filter((t) => {
-            if (isAdmin) return t.status === col.id;
-            return t.status === col.id && t.assigneeId === currentUser?.id;
-          });
-
-          return (
-            <div
-              key={col.id}
-              onDragOver={(e) => e.preventDefault()}
-              onDrop={() => handleDrop(col.id)}
-              className="rounded-xl border border-border bg-card p-3"
-            >
-              <h3 className="font-semibold mb-2">
-                {col.label} ({colTasks.length})
-              </h3>
-
-              <ScrollArea className="h-[400px]">
-                {colTasks.length === 0 && (
-                  <p className="text-sm text-muted-foreground">No tasks</p>
-                )}
-
-                {colTasks.map((task) => {
-                  const canEdit =
-                    isAdmin || task.assigneeId === currentUser?.id;
-
-                  return (
-                    <div
-                      key={task._id}
-                      draggable={canEdit}
-                      onDragStart={() => handleDragStart(task._id)}
-                      className="bg-background border border-border p-3 mb-2 rounded-lg shadow-sm cursor-grab hover:bg-accent"
-                    >
-                      <div className="flex justify-between">
-                        <span>{task.title}</span>
-
-                        {isAdmin && (
-                          <button
-                            onClick={() => deleteTask(task._id)}
-                            className="text-red-500"
-                          >
-                            <Trash2 size={16} />
-                          </button>
-                        )}
-                      </div>
-
-                      <p className="text-xs text-muted-foreground">
-                        {task.description}
-                      </p>
-                    </div>
-                  );
-                })}
-              </ScrollArea>
-            </div>
-          );
-        })}
-      </div>
-
-      <CreateTaskModal
-        open={createOpen}
-        onClose={() => {
-          setCreateOpen(false);
-          fetchTasks();
-        }}
-        teamId={teamId}
-      />
+      {isAdmin && (
+        <Button onClick={() => setCreateOpen(true)}>
+          <Plus className="mr-2 h-4 w-4" />
+          Add Task
+        </Button>
+      )}
     </div>
-  );
-}
+
+    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+      {columns.map((col) => {
+        const colTasks = tasks.filter((t) => {
+          if (isAdmin) return t.status === col.id;
+          return t.status === col.id && t.assigneeId === currentUser?.id;
+        });
+
+        return (
+          <div
+            key={col.id}
+            onDragOver={(e) => e.preventDefault()}
+            onDrop={() => handleDrop(col.id)}
+            className="rounded-xl border border-border bg-card p-3"
+          >
+            <h3 className="font-semibold mb-2">
+              {col.label} ({colTasks.length})
+            </h3>
+
+            <ScrollArea className="h-[400px]">
+              {colTasks.length === 0 && (
+                <p className="text-sm text-muted-foreground">No tasks</p>
+              )}
+
+              {colTasks.map((task) => {
+                const canEdit = task.assigneeId === currentUser?.id;
+
+                // ✅ find assigned member
+                const member = team?.members.find(
+                  (m: any) =>
+                    (m.userId?._id || m.userId) === task.assigneeId
+                );
+
+               const memberName = task.assigneeId?.name || "Unknown";
+
+                return (
+                  <div
+                    key={task._id}
+                    draggable={canEdit}
+                    onDragStart={() => handleDragStart(task._id)}
+                    className="bg-background border border-border p-3 mb-2 rounded-lg shadow-sm cursor-grab hover:bg-accent"
+                  >
+                    <div className="flex justify-between">
+                      <span>{task.title}</span>
+
+                      {isAdmin && (
+                        <button
+                          onClick={() => deleteTask(task._id)}
+                          className="text-red-500"
+                        >
+                          <Trash2 size={16} />
+                        </button>
+                      )}
+                    </div>
+
+                    <p className="text-xs text-muted-foreground">
+                      {task.description}
+                    </p>
+
+                    <p className="text-xs mt-1 text-muted-foreground">
+                      Assigned to: {memberName}
+                    </p>
+                  </div>
+                );
+              })}
+            </ScrollArea>
+          </div>
+        );
+      })}
+    </div>
+
+    <CreateTaskModal
+      open={createOpen}
+      onClose={() => {
+        setCreateOpen(false);
+        fetchTasks();
+      }}
+      teamId={teamId}
+    />
+  </div>
+)}  

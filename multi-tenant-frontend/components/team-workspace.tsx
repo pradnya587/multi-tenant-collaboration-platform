@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react" // ✅ added useEffect
 import { useApp } from "@/context/app-context"
 import { cn } from "@/lib/utils"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
@@ -16,15 +16,20 @@ interface TeamWorkspaceProps {
   onBack: () => void
 }
 
-export function TeamWorkspace({ teamId, onBack, initialTab = "chat" }: any) {
+export function TeamWorkspace({ teamId, onBack, initialTab = "members" }: any){
   const { teams, currentUser, getUserRole, startPrivateChat } = useApp()
   const team = teams.find((t) => t.id === teamId)
   const role = getUserRole(teamId, currentUser?.id ?? "")
   const showPrivateTab = (team?.members?.length ?? 0) > 1
 
-  // Controlled tab state — allows Members panel "Message" button to switch to Private Chat
-  const [activeTab, setActiveTab] = useState(initialTab || "group-chat")
+  // Controlled tab state
+  const [activeTab, setActiveTab] = useState(initialTab || "members")
   const [privateChatTarget, setPrivateChatTarget] = useState<string | null>(null)
+
+  // ✅ FIX: Reset tab when team changes
+  useEffect(() => {
+    setActiveTab("members")
+  }, [teamId])
 
   // Called when user clicks "Message" on a member in the Members panel
   const handleMessageMember = (memberId: string) => {

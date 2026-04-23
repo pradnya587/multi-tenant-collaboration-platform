@@ -28,24 +28,50 @@ export function MembersPanel({ teamId, onStartPrivateChat }: MembersPanelProps) 
   const isAdmin = getUserRole(teamId, currentUser?.id ?? "") === "admin"
   const [copied, setCopied] = useState(false)
   const [members, setMembers] = useState<TeamMember[]>([])
+  const [tasks, setTasks] = useState<any[]>([])
 
   useEffect(() => {
-    const fetchMembers = async () => {
-      if (!teamId) return
-      try {
-        const token = localStorage.getItem("token") || ""
-        const res = await fetch(
-          `http://localhost:5000/api/teams/${teamId}/members`,
-          { headers: { Authorization: `Bearer ${token}` } }
-        )
-        const data = await res.json()
-        if (Array.isArray(data)) setMembers(data)
-      } catch (err) {
-        console.error("Failed to fetch members:", err)
-      }
+  const fetchMembers = async () => {
+    if (!teamId) return
+    try {
+      const token = localStorage.getItem("token") || ""
+      const res = await fetch(
+        `http://localhost:5000/api/teams/${teamId}/members`,
+        { headers: { Authorization: `Bearer ${token}` } }
+      )
+      const data = await res.json()
+      if (Array.isArray(data)) setMembers(data)
+    } catch (err) {
+      console.error("Failed to fetch members:", err)
     }
-    fetchMembers()
-  }, [teamId])
+  }
+
+  const fetchTasks = async () => {
+    try {
+      const token = localStorage.getItem("token") || ""
+      const res = await fetch(
+        `http://localhost:5000/api/tasks/${teamId}`,
+        { headers: { Authorization: `Bearer ${token}` } }
+      )
+      const data = await res.json()
+      if (Array.isArray(data)) setTasks(data)
+    } catch (err) {
+      console.error("Failed to fetch tasks:", err)
+    }
+  }
+
+  // ✅ initial fetch
+  fetchMembers()
+  fetchTasks()
+
+  // ✅ auto refresh every 3 sec
+  const interval = setInterval(fetchTasks, 3000)
+
+  // ✅ cleanup
+  return () => clearInterval(interval)
+
+}, [teamId])
+
 
   if (!team) return null
 
@@ -122,6 +148,24 @@ export function MembersPanel({ teamId, onStartPrivateChat }: MembersPanelProps) 
               const isSelf = memberId === currentUser?.id
               const memberRole = member.role
 
+ const memberTasks = tasks.filter(
+  (task) =>
+    task.assigneeId === memberId ||
+    task.assigneeId === member.userId?._id
+)
+
+const completedTasks = memberTasks.filter(
+  (task) => task.status === "completed"
+).length
+
+const totalTasks = memberTasks.length
+
+const progress =
+  totalTasks === 0
+    ? 0
+    : Math.round((completedTasks / totalTasks) * 100)
+
+
               return (
                 <div key={memberId} className="flex items-center justify-between px-6 py-4 transition-colors hover:bg-accent/20">
                   <div className="flex items-center gap-3.5">
@@ -145,6 +189,19 @@ export function MembersPanel({ teamId, onStartPrivateChat }: MembersPanelProps) 
                         )}
                       </div>
                       <p className="text-xs text-muted-foreground">{memberEmail}</p>
+
+{/* 🔥 Task Info */}
+<div className="mt-1 text-xs text-muted-foreground">
+  {totalTasks} tasks • {progress}% completed
+</div>
+
+{/* 🔥 Progress Bar */}
+<div className="mt-2 h-1.5 w-32 rounded-full bg-muted">
+  <div
+    className="h-full rounded-full bg-primary"
+    style={{ width: `${progress}%` }}
+  />
+</div>
                     </div>
                   </div>
                   <div className="flex items-center gap-2">

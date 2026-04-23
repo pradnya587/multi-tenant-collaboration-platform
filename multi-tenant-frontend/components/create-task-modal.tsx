@@ -1,6 +1,7 @@
 "use client"
 
 import { useState, useEffect } from "react"
+
 import { useApp } from "@/context/app-context"
 import {
   Dialog,
@@ -24,6 +25,9 @@ import {
 import { ClipboardList, Loader2 } from "lucide-react"
 import { toast } from "sonner"
 
+// ✅ FIX: missing import
+import API from "@/lib/api"
+
 interface CreateTaskModalProps {
   open: boolean
   onClose: () => void
@@ -46,27 +50,20 @@ export function CreateTaskModal({
   const [members, setMembers] = useState<any[]>([])
   const [isCreating, setIsCreating] = useState(false)
 
-  const BASE_URL = "http://192.168.43.236:5000"
-
+  const BASE_URL = "http://localhost:5000"
+  
   // 🔥 FETCH MEMBERS
   useEffect(() => {
     const fetchMembers = async () => {
       try {
         const token = localStorage.getItem("token")
 
-        const res = await fetch(
-          `${BASE_URL}/api/teams/${teamId}/members`,
-          {
-            headers: {
-              Authorization: `Bearer ${token}`,
-            },
-          }
-        )
+        // ✅ FIX: use axios API only (remove fetch + res.json)
+        const res = await API.get(`/teams/${teamId}/members`)
 
-        const data = await res.json()
-        console.log("Members:", data)
+        console.log("Members:", res.data)
 
-        setMembers(data)
+        setMembers(res.data)
       } catch (err) {
         console.error(err)
         toast.error("Failed to load members")
@@ -85,28 +82,17 @@ export function CreateTaskModal({
     setIsCreating(true)
 
     try {
-      const res = await fetch(`${BASE_URL}/api/tasks`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          title,
-          description,
-          teamId,
-          status: "todo",
-          assigneeId: assigneeId || currentUser?.id,
-          createdBy: currentUser?.id,
-          deadline: deadline || new Date().toISOString(),
-          role,
-        }),
+      // ❌ FIX: replace fetch with API (consistent + auto token)
+      const res = await API.post("/tasks", {
+        title,
+        description,
+        teamId,
+        status: "todo",
+        assigneeId: assigneeId || currentUser?.id,
+        createdBy: currentUser?.id,
+        deadline: deadline || new Date().toISOString(),
+        role,
       })
-
-      const data = await res.json()
-
-      if (!res.ok) {
-        throw new Error(data.message || "Failed to create task")
-      }
 
       toast.success("Task created!")
 

@@ -11,7 +11,10 @@ import chatRoutes from "./routes/chatRoutes.js";
 const app = express();
 
 // ✅ Middleware
-app.use(cors()); // allow all origins (good for dev)
+app.use(cors({
+  origin: true,
+  credentials: true,
+})); // allow all origins (good for dev)
 app.use(express.json());
 
 // ✅ Routes

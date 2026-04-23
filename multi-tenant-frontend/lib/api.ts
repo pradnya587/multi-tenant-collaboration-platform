@@ -1,7 +1,8 @@
 import axios from "axios"
 
 const API = axios.create({
-  baseURL: "http://localhost:5000/api", // change if your backend port differs
+baseURL: "http://localhost:5000/api", // change if your backend port differs
+  withCredentials: true,
 })
 
 // 👇 Attach token automatically

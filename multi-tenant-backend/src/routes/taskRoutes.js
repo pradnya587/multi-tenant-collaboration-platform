@@ -9,7 +9,7 @@ router.get("/user/:userId", async (req, res) => {
   try {
     const tasks = await Task.find({
       assigneeId: req.params.userId,
-    });
+    }).populate("assigneeId", "name email"); // 🔥 ADD THIS
 
     res.json(tasks);
   } catch (err) {
@@ -20,7 +20,9 @@ router.get("/user/:userId", async (req, res) => {
 // ✅ GET tasks by team
 router.get("/:teamId", async (req, res) => {
   try {
-    const tasks = await Task.find({ teamId: req.params.teamId });
+    const tasks = await Task.find({ teamId: req.params.teamId })
+      .populate("assigneeId", "name email"); // ✅ FIX ADDED HERE
+
     res.json(tasks);
   } catch (err) {
     res.status(500).json({ message: err.message });
@@ -58,7 +60,8 @@ router.patch("/:id", async (req, res) => {
       return res.status(404).json({ message: "Task not found" });
     }
 
-    if (role !== "admin" && task.assigneeId !== userId) {
+    // 🔥 FIX: ObjectId vs string comparison
+    if (task.assigneeId.toString() !== userId) {
       return res.status(403).json({
         message: "You can only update your own tasks",
       });
@@ -68,7 +71,7 @@ router.patch("/:id", async (req, res) => {
       req.params.id,
       req.body,
       { new: true }
-    );
+    ).populate("assigneeId", "name email"); // ✅ OPTIONAL IMPROVEMENT
 
     res.json(updatedTask);
   } catch (err) {
