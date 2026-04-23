@@ -8,6 +8,8 @@ import { Label } from "@/components/ui/label"
 import { ThemeToggle } from "@/components/theme-toggle"
 import { Users, ArrowRight, Eye, EyeOff, Loader2 } from "lucide-react"
 import { toast } from "sonner"
+import { signInWithPopup } from "firebase/auth"
+import { auth, provider } from "@/lib/firebase"
 
 interface AuthScreenProps {
   onSuccess: () => void
@@ -102,6 +104,49 @@ export function AuthScreen({ onSuccess }: AuthScreenProps) {
 
   setIsLoading(false)
 }
+
+
+
+//firebase google sign-in
+const handleGoogleLogin = async () => {
+  try {
+    const result = await signInWithPopup(auth, provider)
+    const user = result.user
+
+    const res = await fetch("http://localhost:5000/api/auth/google", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        name: user.displayName,
+        email: user.email,
+        photo: user.photoURL,
+      }),
+    })
+
+    const data = await res.json()
+
+    if (!res.ok) {
+      throw new Error(data.message || "Google login failed")
+    }
+
+    // ✅ store token
+    localStorage.setItem("token", data.token)
+
+    // ✅ login in your app context
+    login(data.user)
+
+    toast.success("Logged in with Google 🚀")
+    onSuccess()
+
+  } catch (error: any) {
+    console.error(error)
+    toast.error(error.message || "Google login failed")
+  }
+}
+
+
 
   return (
     <div className="relative flex min-h-screen items-center justify-center overflow-hidden bg-background p-4">
@@ -255,6 +300,17 @@ export function AuthScreen({ onSuccess }: AuthScreenProps) {
               )}
             </Button>
           </form>
+
+
+           
+              <Button
+  type="button"
+  onClick={handleGoogleLogin}
+  className="mt-3 h-11 w-full rounded-xl border"
+>
+  Continue with Google
+</Button>
+
 
           <div className="mt-6 text-center text-sm text-muted-foreground">
             {mode === "login" ? (

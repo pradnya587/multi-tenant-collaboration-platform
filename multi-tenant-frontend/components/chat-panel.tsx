@@ -157,10 +157,10 @@ export function ChatPanel({ teamId, type, initialActiveChatId }: ChatPanelProps)
   // MAIN CHAT UI
   // ═══════════════════════════════════════════════
   return (
-    <div className="flex h-[calc(100vh-12rem)] overflow-hidden rounded-2xl border bg-card">
+    <div className="flex h-[calc(100vh-12rem)] overflow-hidden rounded-3xl border border-border/40 bg-gradient-to-br from-card to-card/50 shadow-lg">
 
       {/* Sidebar */}
-      <div className="flex w-64 flex-col border-r">
+      <div className="flex w-64 flex-col border-r border-border/30 bg-gradient-to-b from-background/50 to-background/20">
         <div className="flex items-center justify-between p-4">
           <span className="text-xs font-semibold uppercase text-muted-foreground">
             {type === "group" ? "Channels" : "Direct Messages"}
@@ -250,7 +250,7 @@ export function ChatPanel({ teamId, type, initialActiveChatId }: ChatPanelProps)
       <div className="flex flex-1 flex-col">
 
         {/* Header */}
-        <div className="flex items-center gap-3 border-b px-4 py-3">
+        <div className="flex items-center gap-3 border-b border-border/30 px-4 py-4 bg-gradient-to-r from-background/30 to-transparent">
           {activeChat && type === "private" && (
             <Avatar className="h-8 w-8">
               <AvatarFallback className="bg-primary/10 text-xs font-bold text-primary">
@@ -274,7 +274,7 @@ export function ChatPanel({ teamId, type, initialActiveChatId }: ChatPanelProps)
         </div>
 
         {/* Messages */}
-        <div ref={scrollRef} className="flex-1 overflow-y-auto p-4 space-y-4">
+        <div ref={scrollRef} className="flex-1 overflow-y-auto p-5 space-y-4 bg-gradient-to-b from-transparent via-background/10 to-background/20">
           {!activeChat && (
             <div className="flex flex-col items-center justify-center h-full gap-2 text-muted-foreground">
               <MessageCircle className="h-10 w-10 opacity-30" />
@@ -305,10 +305,10 @@ export function ChatPanel({ teamId, type, initialActiveChatId }: ChatPanelProps)
                 )}
                 <div
                   className={cn(
-                    "max-w-[75%] px-3.5 py-2 rounded-2xl text-sm leading-relaxed",
+                    "max-w-[75%] px-4 py-2.5 rounded-2xl text-sm leading-relaxed shadow-sm",
                     isOwn
-                      ? "bg-primary text-primary-foreground rounded-br-md"
-                      : "bg-muted text-foreground rounded-bl-md"
+                      ? "bg-gradient-to-br from-primary to-primary/90 text-primary-foreground rounded-br-md shadow-primary/20"
+                      : "bg-gradient-to-br from-muted to-muted/80 text-foreground rounded-bl-md"
                   )}
                 >
                   {msg.content}
@@ -327,16 +327,16 @@ export function ChatPanel({ teamId, type, initialActiveChatId }: ChatPanelProps)
             e.preventDefault()
             handleSend()
           }}
-          className="flex items-center gap-2 border-t px-4 py-3"
+          className="flex items-center gap-2 border-t border-border/30 px-4 py-4 bg-gradient-to-t from-background/50 to-transparent"
         >
           <Input
             value={message}
             onChange={(e) => setMessage(e.target.value)}
             placeholder={type === "private" ? "Type a private message..." : "Type a message..."}
-            className="flex-1 rounded-xl"
+            className="flex-1 rounded-xl h-10 bg-gradient-to-r from-background/60 to-background/40 border-border/60 transition-all focus:border-primary/50 focus:shadow-lg focus:shadow-primary/10"
             disabled={!activeChatId}
           />
-          <Button type="submit" size="icon" className="h-9 w-9 rounded-xl" disabled={!activeChatId}>
+          <Button type="submit" size="icon" className="h-10 w-10 rounded-xl bg-gradient-to-r from-primary to-primary/90 hover:shadow-lg transition-all" disabled={!activeChatId}>
             <Send className="h-4 w-4" />
           </Button>
         </form>
