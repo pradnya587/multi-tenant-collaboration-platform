@@ -174,13 +174,46 @@ const handleGoogleLogin = async () => {
       <div className="relative z-10 w-full max-w-md">
         {/* Logo */}
         <div className="mb-8 flex flex-col items-center gap-3">
-          <div className="glow-primary flex h-14 w-14 items-center justify-center rounded-2xl bg-primary shadow-lg">
-            <Users className="h-7 w-7 text-primary-foreground" />
-          </div>
-          <div className="text-center">
-            <h1 className="font-mono text-xl font-bold tracking-tight text-foreground">TeamSync</h1>
-            <p className="mt-1 text-sm text-muted-foreground">Collaboration, simplified.</p>
-          </div>
+
+          <div className="flex flex-col items-center gap-2">
+  <svg width="72" height="72" viewBox="0 0 220 220" xmlns="http://www.w3.org/2000/svg">
+    {/* Orbit ring */}
+    <circle cx="110" cy="110" r="72" fill="none" stroke="#e4e4e7" strokeWidth="1"/>
+
+    {/* Cross connectors */}
+    <line x1="110" y1="38"  x2="172" y2="74"  stroke="#c4b5fd" strokeWidth="2" strokeLinecap="round"/>
+    <line x1="172" y1="74"  x2="172" y2="146" stroke="#c4b5fd" strokeWidth="2" strokeLinecap="round"/>
+    <line x1="172" y1="146" x2="110" y2="182" stroke="#c4b5fd" strokeWidth="2" strokeLinecap="round"/>
+    <line x1="110" y1="182" x2="48"  y2="146" stroke="#c4b5fd" strokeWidth="2" strokeLinecap="round"/>
+    <line x1="48"  y1="146" x2="48"  y2="74"  stroke="#c4b5fd" strokeWidth="2" strokeLinecap="round"/>
+    <line x1="48"  y1="74"  x2="110" y2="38"  stroke="#c4b5fd" strokeWidth="2" strokeLinecap="round"/>
+    <line x1="48"  y1="74"  x2="172" y2="146" stroke="#ddd6fe" strokeWidth="1.2" strokeLinecap="round" strokeDasharray="4 3"/>
+    <line x1="172" y1="74"  x2="48"  y2="146" stroke="#ddd6fe" strokeWidth="1.2" strokeLinecap="round" strokeDasharray="4 3"/>
+    <line x1="110" y1="38"  x2="110" y2="182" stroke="#ddd6fe" strokeWidth="1.2" strokeLinecap="round" strokeDasharray="4 3"/>
+
+    {/* Center node */}
+    <circle cx="110" cy="110" r="22" fill="#7C3AED"/>
+    <circle cx="110" cy="110" r="10" fill="#ffffff"/>
+
+    {/* Outer nodes */}
+    <circle cx="110" cy="38"  r="10" fill="#7C3AED"/>
+    <circle cx="172" cy="74"  r="8"  fill="#8B5CF6"/>
+    <circle cx="172" cy="146" r="8"  fill="#8B5CF6"/>
+    <circle cx="110" cy="182" r="10" fill="#7C3AED"/>
+    <circle cx="48"  cy="146" r="8"  fill="#8B5CF6"/>
+    <circle cx="48"  cy="74"  r="8"  fill="#8B5CF6"/>
+    <circle cx="110" cy="38"  r="4"  fill="#ffffff"/>
+    <circle cx="110" cy="182" r="4"  fill="#ffffff"/>
+  </svg>
+
+  <div className="text-center">
+    <h1 className="text-xl font-extrabold tracking-tight text-foreground">
+      Team<span className="text-primary">Sync</span>
+    </h1>
+    <p className="mt-0.5 text-sm text-muted-foreground">Collaboration, simplified.</p>
+  </div>
+</div>
+
         </div>
 
         {/* Form card */}

@@ -8,7 +8,10 @@ const taskSchema = new mongoose.Schema({
     type: String,
     default: "todo",
   },
-  assigneeId: String,
+  assigneeId: {
+    type: mongoose.Schema.Types.ObjectId,  // ✅ Change from String
+    ref: "User",                            // ✅ Add ref
+  },
   createdBy: String,
   deadline: Date,
 }, { timestamps: true });

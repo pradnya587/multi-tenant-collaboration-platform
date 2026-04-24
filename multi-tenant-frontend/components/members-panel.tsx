@@ -148,11 +148,10 @@ export function MembersPanel({ teamId, onStartPrivateChat }: MembersPanelProps) 
               const isSelf = memberId === currentUser?.id
               const memberRole = member.role
 
- const memberTasks = tasks.filter(
-  (task) =>
-    task.assigneeId === memberId ||
-    task.assigneeId === member.userId?._id
-)
+const memberTasks = tasks.filter((task) => {
+  const taskAssignee = task.assigneeId?._id || task.assigneeId
+  return taskAssignee?.toString() === memberId?.toString()
+})
 
 const completedTasks = memberTasks.filter(
   (task) => task.status === "completed"

@@ -72,10 +72,13 @@ const team = teams.find((t) => t.id === teamId);
   const handleDrop = async (status: TaskStatus) => {
     if (!draggedTaskId) return;
 
-    const task = tasks.find((t) => t._id === draggedTaskId);
+   // In handleDrop — fix the assignee check
+const task = tasks.find((t) => t._id === draggedTaskId);
 
-    if (task?.assigneeId !== currentUser?.id) {
+const taskAssigneeId = task?.assigneeId?._id || task?.assigneeId;
+if (taskAssigneeId?.toString() !== currentUser?.id?.toString()) {
   toast.error("You can only update your own tasks");
+  setDraggedTaskId(null);
   return;
 }
 
@@ -142,10 +145,12 @@ const team = teams.find((t) => t.id === teamId);
 
     <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
       {columns.map((col) => {
-        const colTasks = tasks.filter((t) => {
-          if (isAdmin) return t.status === col.id;
-          return t.status === col.id && t.assigneeId === currentUser?.id;
-        });
+       // In colTasks filter
+const colTasks = tasks.filter((t) => {
+  const assigneeId = t.assigneeId?._id || t.assigneeId;
+  if (isAdmin) return t.status === col.id;
+  return t.status === col.id && assigneeId?.toString() === currentUser?.id?.toString();
+});
 
         return (
           <div
@@ -164,7 +169,8 @@ const team = teams.find((t) => t.id === teamId);
               )}
 
               {colTasks.map((task) => {
-                const canEdit = task.assigneeId === currentUser?.id;
+                // In canEdit
+const canEdit = (task.assigneeId?._id || task.assigneeId)?.toString() === currentUser?.id?.toString();
 
                 // ✅ find assigned member
                 const member = team?.members.find(
